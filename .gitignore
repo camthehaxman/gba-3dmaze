@@ -1,5 +1,6 @@
 3dmaze
 sineTable.c
+recipTable.c
 *.gba
 *.elf
 *.sym

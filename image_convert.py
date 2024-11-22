@@ -15,5 +15,5 @@ def image_to_c(img, varname):
 		print('0x%X,' % rgb_to_rgb555(color))
 	print('};')
 
-img = Image.open(sys.argv[1]).transpose(Image.FLIP_TOP_BOTTOM).convert('RGB').resize((128,128), Image.NEAREST)
+img = Image.open(sys.argv[1]).convert('RGB').resize((128,128), Image.NEAREST)
 image_to_c(img, sys.argv[2])

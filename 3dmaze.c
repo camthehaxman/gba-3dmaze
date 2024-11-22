@@ -159,17 +159,25 @@ static inline void plot_pixel_checked(int x, int y, uint16_t color)
 		screenPixels[y * windowWidth + x] = color;
 }
 
+// Implementation of fx_div for denominators less than 1
+ARM_CODE
+static inline fixed_t fx_div_lt1(fixed_t a, fixed_t b)
+{
+	assert(b < TO_FIXED(1) || -b < TO_FIXED(1));
+	return fx_mul(a, (b >= 0) ? recipTable[b] : -recipTable[-b]);
+}
+
 ARM_CODE
 static Vec2 cast_ray_2d(Vec2 pos, Vec2 dir)
 {
 	fixed_t sx;  // ray distance (hypotenuse) it takes to move one unit in x direction
 	fixed_t sy;  // ray distance (hypotenuse) it takes to move one unit in y direction
 
-	// This division is an expensive performance killer, and I hate it!
-	fixed_t dydx = dir.x == 0 ? 0 : fx_div(dir.y,dir.x);
-	fixed_t dxdy = dir.y == 0 ? 0 : fx_div(dir.x,dir.y);
-	sx = dir.x == 0 ? FIXED_MAX : fx_sqrt(TO_FIXED(1) + fx_mul(dydx,dydx));
-	sy = dir.y == 0 ? FIXED_MAX : fx_sqrt(TO_FIXED(1) + fx_mul(dxdy,dxdy));
+	fixed_t dydx = fx_div_lt1(dir.y,dir.x);
+	fixed_t dxdy = fx_div_lt1(dir.x,dir.y);
+	// This square root is an expensive performance killer, and I hate it!
+	sx = fx_sqrt(TO_FIXED(1) + fx_mul(dydx,dydx));
+	sy = fx_sqrt(TO_FIXED(1) + fx_mul(dxdy,dxdy));
 
 	fixed_t lx = FIXED_MAX;  // ray length in accumulated x direction
 	fixed_t ly = FIXED_MAX;  // ray length in accumulated y direction
@@ -256,6 +264,82 @@ static fixed_t slopeLUT[160];
 ARM_CODE
 void draw_scene(void)
 {
+	const fixed_t w = TO_FIXED(1);  // width of screen in world space
+	const fixed_t h = fx_mul(w, TO_FIXED((float)windowHeight / (float)windowWidth));  // height of screen in world space
+	const fixed_t d = TO_FIXED(.5);  // distance from eye to screen in world space
+	const fixed_t eyeZ = TO_FIXED(.5);  // height of eye
+
+	//const fixed_t dx = fx_div(w, TO_FIXED(windowWidth));
+	const fixed_t dx = (w << FRACT_BITS) / TO_FIXED(windowWidth);
+
+	fixed_t x = -w / 2;
+#ifdef BLOCKY_MODE
+	for (int px = 0; px < windowWidth/2; px++, x += dx*2)
+#else
+	for (int px = 0; px < windowWidth; px++, x += dx)
+#endif
+	{
+		Vec2 dir = (Vec2){ x, d };
+		dir = vec2_rotate(dir, camYaw);
+		Vec2 hit = cast_ray_2d(camPos, dir);
+
+		// calculate distance of hit from camera
+		// can either transform back to camera space or use
+		// pythagorean theorem
+		Vec2 hit2 = vec2_rotate(vec2_sub(hit, camPos), -camYaw);
+		fixed_t depth = hit2.y;
+
+		const uint16_t *texture = (maze_lookup(fx_int(hit.x), fx_int(hit.y)) & GLOBE) ? tex_cover8 : tex_brick;
+
+#ifdef BLOCKY_MODE
+		const int wheight = windowHeight/2;
+#else
+		const int wheight = windowHeight;
+#endif
+
+		fixed_t v = 0;  // texture coordinate
+		fixed_t depthtoscale = fx_div(h, fx_mul(TO_FIXED(wheight), d));
+		// how much to increment v
+		fixed_t scale = fx_mul(depth, depthtoscale);
+		assert(scale < TO_FIXED(1));
+		// how many pixels the column takes up
+		//fixed_t span = fx_div(TO_FIXED(1), scale);
+		fixed_t span = recipTable[scale];
+
+		int start = wheight/2 - fx_int(span)/2;
+		int end = wheight/2 + fx_int(span)/2;
+		if (end > wheight) end = wheight;
+
+		assert(end >= start);
+
+		uint16_t *out = screenPixels + px;
+		int py;
+
+		for (py = start; py < 0; py++)
+			v += scale;
+		for (py = 0; py < start; py++)
+		{
+			*out = RGB555(20, 20, 20);
+			out += windowWidth;
+		}
+		for (; py < end; py++)
+		{
+			*out = sample_texture(texture, hit.x+hit.y, v);
+			v += scale;
+			out += windowWidth;
+		}
+		for (; py < wheight; py++)
+		{
+			*out = RGB555(30, 15, 0);
+			out += windowWidth;
+		}
+	}
+}
+
+#if 0
+ARM_CODE
+void draw_scene(void)
+{
 	// This needs a lot of optimization!
 
 	//const fixed_t h = TO_FIXED(1);  // height of screen, in world space
@@ -315,6 +399,7 @@ void draw_scene(void)
 		}
 	}
 }
+#endif
 
 static const int CELLW = 8;
 

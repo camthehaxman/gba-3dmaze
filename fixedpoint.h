@@ -27,7 +27,7 @@ ARM_CODE static inline fixed_t fx_sqrt(fixed_t n) { return sqrtf(n); }
 
 typedef int32_t fixed_t;
 
-#define FRACT_BITS 8
+#define FRACT_BITS 15
 #define FIXED_MAX INT_MAX
 
 #define TO_FIXED(n) ((fixed_t)((n) * (1 << FRACT_BITS)))
@@ -49,9 +49,8 @@ static inline fixed_t fx_mul(fixed_t a, fixed_t b)
 }
 
 ARM_CODE
-static inline fixed_t fx_div(fixed_t a, fixed_t b)
+static fixed_t fx_div(fixed_t a, fixed_t b)
 {
-	//return ((int64_t)a << FRACT_BITS) / b;
 	return ((int32_t)a << FRACT_BITS) / b;
 }
 
@@ -119,8 +118,9 @@ static int32_t sqrt_fx16_16_to_fx16_16(int32_t v) {
 ARM_CODE
 static inline fixed_t fx_sqrt(fixed_t n)
 {
-	int32_t n16_16 = n << (16 - FRACT_BITS);
-	return sqrt_fx16_16_to_fx16_16(n16_16) >> (16 - FRACT_BITS);
+    return sqrt_fx16_16_to_fx16_16(n);
 }
 
 #endif
+
+extern const fixed_t recipTable[TO_FIXED(1)];

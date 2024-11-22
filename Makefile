@@ -5,7 +5,7 @@ OPTIMIZE := -O3
 CFLAGS  := $(shell sdl2-config --cflags) -Wall -g $(OPTIMIZE) $(SANITIZE) $(PROFILE)
 LDFLAGS := $(SANITIZE) $(PROFILE) $(shell sdl2-config --libs) -lm
 BITMAPS := brick.bmp castle.bmp cover8.bmp wood24.bmp
-OBJECTS := 3dmaze.o sineTable.o $(BITMAPS:.bmp=.o)
+OBJECTS := 3dmaze.o sineTable.o recipTable.o $(BITMAPS:.bmp=.o)
 
 GBA_PREFIX  := $(DEVKITARM)/bin/arm-none-eabi-
 GBA_CC      := $(GBA_PREFIX)gcc
@@ -20,11 +20,6 @@ default: 3dmaze 3dmaze.gba
 # Host (PC) version
 3dmaze: $(OBJECTS) sdl.o
 
-# GBA version
-3dmaze.elf: $(OBJECTS:.o=.gba.o) gba.gba.o
-	$(GBA_CC) -specs=gba.specs $^ $(GBA_LDFLAGS) -Xlinker -Map=$(@:.elf=.map) -o $@
-	nm $@ | cut -d' ' -f1,3 | sort | sed -e '/ __.*\(start\|end\)/d' > $(@:.elf=.sym)
-
 profile: 3dmaze
 	$(RM) gmon.out
 	./3dmaze
@@ -33,14 +28,25 @@ profile: 3dmaze
 clean:
 	$(RM) 3dmaze *.gba *.elf *.o *.sym *.map gmon.out sineTable.c
 
-%.c: %.bmp image_convert.py
-	./image_convert.py $< $(basename $<) > $@
+# GBA rules
 
-sineTable.c: make_sin_table.py
-	./make_sin_table.py > $@
+3dmaze.elf: $(OBJECTS:.o=.gba.o) gba.gba.o
+	$(GBA_CC) -specs=gba.specs $^ $(GBA_LDFLAGS) -Xlinker -Map=$(@:.elf=.map) -o $@
+	nm $@ | cut -d' ' -f1,3 | sort | sed -e '/ __.*\(start\|end\)/d' > $(@:.elf=.sym)
 
 %.gba.o: %.c
 	$(GBA_CC) $(GBA_CFLAGS) -c -o $@ $<
 
 %.gba: %.elf
 	$(GBA_OBJCOPY) -O binary $< $@
+
+# Generated C files
+
+%.c: %.bmp image_convert.py
+	./image_convert.py $< $(basename $<) > $@
+
+sineTable.c: ./make_sin_table.py ; ./$< > $@
+recipTable.c: ./make_recip_table.py ; ./$< > $@
+
+# Dependencies
+3dmaze.o 3dmaze.gba.o sineTable.o sineTable.gba.o recipTable.o recipTable.gba.o: fixedpoint.h
