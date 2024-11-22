@@ -1,0 +1,8 @@
+3dmaze
+sineTable.c
+*.gba
+*.elf
+*.sym
+*.map
+*.o
+*.sav
